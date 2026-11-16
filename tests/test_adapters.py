@@ -64,5 +64,38 @@ class TestInstrumentCallable(unittest.TestCase):
         self.assertEqual(rec.spans[0].node, "add")
 
 
+class TestDeltaSemantics(unittest.TestCase):
+    def test_diff_pinpoints_only_changed_node(self):
+        """全局字段（variant）变化不应让所有节点都被标记；只有真正改输出的节点才算。"""
+        import tempfile
+
+        from tracekit import diff_runs, load_run
+
+        class TouchNode:
+            name = "TouchNode"
+
+            def run(self, shared):
+                shared["query"] = shared["q"]
+                return "default"
+
+        class AnswerNode:
+            name = "AnswerNode"
+
+            def run(self, shared):
+                shared["answer"] = "[v2]" if shared["variant"] == "v2" else "[v1]"
+                return "default"
+
+        with tempfile.TemporaryDirectory() as td:
+            ids = []
+            for variant in ("v1", "v2"):
+                rec = TraceRecorder(run_dir=td, name=variant)
+                shared = {"q": "hi", "variant": variant}
+                for n in (TouchNode(), AnswerNode()):
+                    instrument_node(n, rec).run(shared)
+                ids.append(rec.finish().run_id)
+            d = diff_runs(load_run(ids[0], td), load_run(ids[1], td))
+            self.assertEqual(d.changed_nodes, ["AnswerNode"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

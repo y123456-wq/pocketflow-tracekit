@@ -36,11 +36,17 @@ def instrument_node(node: Any, recorder: TraceRecorder, name: Optional[str] = No
 
         def run(self, shared: Any) -> Any:
             with recorder.span(node_name, inputs=_preview(shared)) as sp:
+                before = dict(shared) if isinstance(shared, dict) else None
                 result = self._inner.run(shared)
-                # PocketFlow 节点通过 shared 传值、run 只返回 action，
-                # 因此输出摘要取 run 之后的 shared 快照，回放 diff 才有意义。
+                # PocketFlow 节点通过 shared 传值、run 只返回 action。输出摘要取
+                # 该节点对 shared 的"增量改动"（而非整份快照），这样回放 diff 才能
+                # 精确定位真正变化的节点，而不是被全局字段带偏。
                 # 必须走 set_outputs：span() 退出时只持久化 _pending_outputs。
-                sp.set_outputs(_preview(shared))
+                if before is not None and isinstance(shared, dict):
+                    delta = {k: v for k, v in shared.items() if k not in before or before[k] != v}
+                else:
+                    delta = shared
+                sp.set_outputs(_preview(delta))
                 return result
 
         def __call__(self, *args, **kwargs):
