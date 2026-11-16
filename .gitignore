@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Trace 产物：默认不入库，除非是刻意归档的 baseline
+runs/
+*.jsonl
+
+.idea/
+.vscode/
+.DS_Store
